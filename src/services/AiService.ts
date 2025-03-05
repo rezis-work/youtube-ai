@@ -12,5 +12,5 @@ export const getAIResponse = async (prompt: string): Promise<string> => {
   });
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  return data?.choices[0].message.content;
 };
