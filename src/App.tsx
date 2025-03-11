@@ -7,6 +7,8 @@ import {
 import { getUser, signInWithGoogle, signOut } from "./services/authService";
 import { getAIResponse } from "./services/AiService";
 import { User } from "@supabase/supabase-js";
+import { supabase } from "./services/supabaseClient";
+import { RealtimePostgresInsertPayload } from "@supabase/supabase-js";
 
 interface Message {
   id?: string;
@@ -32,6 +34,12 @@ function App() {
       startOrLoadConversation(user.id);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (conversationId) {
+      subscribeToMessages(conversationId);
+    }
+  }, [conversationId]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -72,6 +80,32 @@ function App() {
     } catch (err) {
       console.error("Error in startOrLoadConversation:", err);
     }
+  };
+
+  const subscribeToMessages = (conversationId: string) => {
+    const subscription = supabase
+      .channel("realtime-messages")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (
+          payload: RealtimePostgresInsertPayload<{ conversation_id: string }>
+        ) => {
+          const newMessage = payload.new as Message;
+          if (newMessage.conversation_id === conversationId) {
+            setMessages((prevMessages) => [...prevMessages, newMessage]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
   };
 
   const sendMessage = async () => {
